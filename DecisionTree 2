@@ -1,3 +1,10 @@
+# Author: Zhenhua Shi
+# Date: 09/17/2023
+# Description: This is a script for decision tree algorithm implementation for the car evaluation dataset
+
+# Prepare data
+
+# ---- Here is to change the tree depth
 MAX_DEPTH = 6
 # ----
 
