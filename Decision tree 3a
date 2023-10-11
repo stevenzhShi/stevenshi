@@ -1,0 +1,181 @@
+# Author: Zhenhua Shi
+# Date: 09/17/2023
+# Description: This is a script for decision tree algorithm implementation for the car evaluation dataset
+
+# Prepare data
+
+# ---- Here is to change the tree depth
+MAX_DEPTH = 6
+# ----
+
+def read_csv_file(filename):
+    with open(filename, 'r') as file:
+        return [line.strip().split(',') for line in file]
+training_data = read_csv_file(r"C:\Users\civil\OneDrive - University of Utah\Desktop\Utah class\conputer machine hw\hw_1\bank\train.csv")
+test_data = read_csv_file(r"C:\Users\civil\OneDrive - University of Utah\Desktop\Utah class\conputer machine hw\hw_1\bank\test.csv")
+
+attributes_dict={'age':['yes','no'],
+             'job':['admin.','unknown','unemployed','management','housemaid','entrepreneur','student','blue-collar','self-employed','retired','technician','services'],
+                    'martial':['married','divorced','single'],
+                    'education':['unknown','secondary','primary','tertiary'],
+                     'default':['yes','no'],
+                     'balance':['yes','no'],
+                     'housing':['yes','no'],
+                     'loan':['yes','no'],
+                     'contact':['unknown','telephone','cellular'],
+                     'day':['yes','no'],
+                     'month':['jan', 'feb', 'mar', 'apr','may','jun','jul','aug','sep','oct', 'nov', 'dec'],
+                     'duration': ['yes','no'],
+                     'campaign':['yes','no'],
+                     'pdays':['yes','no'],
+                     'previous':['yes','no'],
+                     'poutcome':[ 'unknown','other','failure','success']}
+
+def attribute_position(attribute):
+    positions = {
+        'age': 0,
+        'job': 1,
+        'martial': 2,
+        'education': 3,
+        'default': 4,
+        'balance': 5,
+        'housing': 6,
+        'loan': 7,
+        'contact': 8,
+        'day': 9,
+        'month': 10,
+        'duration': 11,
+        'campaign': 12,
+        'pdays': 13,
+        'previous': 14,
+        'poutcome': 15,
+        'y': 16
+    }
+    return positions.get(attribute, 0)
+
+# Helper functions
+def gini_index(groups, classes):
+    total_instances= float(sum([len(groups[attr_val]) for attr_val in groups]))
+    gini = 0.0
+    for attr_val in groups:
+        size = float(len(groups[attr_val]))
+        if size == 0:
+            continue
+        score = 0.0
+        for class_val in classes:  
+            p = [row[-1] for row in groups[attr_val]].count(class_val) /size
+            score += p * p
+        gini += (1.0 - score) * (size / total_instances)
+    return gini
+
+def m_error(groups, classes):
+    N_ins = float(sum([len(groups[attr_val]) for attr_val in groups]))
+    m_err = 0.0
+    for attr_val in groups:
+        size = float(len(groups[attr_val]))
+        if size == 0:
+            continue
+        score = 0.0
+        temp=0
+        for class_val in classes:
+            p = [row[-1] for row in groups[attr_val]].count(class_val) / size
+            temp=max(temp,p)
+            score=1-temp
+        m_err += score* (size / N_ins)
+    return m_err
+
+def exp_entropy(groups, classes):
+    N_ins= float(sum([len(groups[attr_val]) for attr_val in groups])) 
+    exp_ent = 0.0
+    for attr_val in groups:
+        size = float(len(groups[attr_val]))
+        if size == 0:
+            continue
+        score = 0.0
+        for class_val in classes:
+            p = [row[-1] for row in groups[attr_val]].count(class_val) / size
+            if p==0:
+                temp=0
+            else:
+                temp=p*math.log2(1/p)
+            score +=temp 
+        exp_ent += score* (size / N_ins)
+    return exp_ent 
+
+
+def split_data(attribute, dataset):
+    branch_obj = {attr_val: [] for attr_val in attributes_dict[attribute]}
+    for row in dataset:
+        for attr_val in attributes_dict[attribute]:
+            if row[attribute_position(attribute)]==attr_val:
+                branch_obj[attr_val].append(row)
+    return branch_obj
+
+def get_best_split(dataset):
+    label_values = list(set(row[-1] for row in dataset)) 
+    metric_obj = {attr_val: 0 for attr_val in attributes_dict}
+    for attribute in attributes_dict:
+        groups = split_data(attribute, dataset)
+        metric_obj[attribute] =  gini_index(groups, label_values)
+        #metric_obj[attribute] =  exp_entropy(groups, label_values)
+        #metric_obj[attribute] =  m_error(groups, label_values)
+    best_attribute = min(metric_obj, key=metric_obj.get)
+    best_groups = split_data(best_attribute, dataset)
+    return {'best_attribute':best_attribute, 'best_groups':best_groups}
+
+def get_leaf_node_label(group):
+    majority_labels = [row[-1] for row in group]
+    return max(set(majority_labels), key=majority_labels.count)
+
+def check_node_divisible(branch_obj):
+    # check if node is divisible by at least 2 branches
+    non_empty_indices = [key for key, value in branch_obj.items() if value]
+    return len(non_empty_indices) > 1
+
+def get_child_node(node, max_depth, current_depth):
+    if not check_node_divisible(node['best_groups']):
+        for key in node['best_groups']:
+            if node['best_groups'][key]:
+                node[key] = get_leaf_node_label(node['best_groups'][key])
+            else:
+                node[key] = get_leaf_node_label(sum(node['best_groups'].values(), []))
+        return
+
+    if current_depth >= max_depth:
+        for key in node['best_groups']:
+            if node['best_groups'][key]:
+                node[key] = get_leaf_node_label(node['best_groups'][key])
+            else:
+                node[key] = get_leaf_node_label(sum(node['best_groups'].values(), []))
+        return
+
+    for key in node['best_groups']:
+        if node['best_groups'][key]:
+            node[key] = get_best_split(node['best_groups'][key])
+            get_child_node(node[key], max_depth, current_depth + 1)
+        else:
+            node[key] = get_leaf_node_label(sum(node['best_groups'].values(), []))
+
+# Build tree
+def build(training_data, max_depth):
+    root = get_best_split(training_data)
+    get_child_node(root, max_depth, 1)
+    return root
+
+def predict(node, instance):
+    if isinstance(node[instance[attribute_position(node['best_attribute'])]], dict):
+        return predict(node[instance[attribute_position(node['best_attribute'])]], instance)
+    else:
+        return node[instance[attribute_position(node['best_attribute'])]]
+
+def calculate_error(true_labels, predicted_labels):
+    incorrect_count = sum(1 for true, pred in zip(true_labels, predicted_labels) if true != pred)
+    return incorrect_count / len(true_labels) * 100.0
+
+tree = build(training_data, max_depth=MAX_DEPTH)
+true_labels = []
+predicted_labels = []
+for row in training_data:
+    true_labels.append(row[-1])
+    predicted_labels.append(predict(tree, row))
+print(calculate_error(true_labels, predicted_labels))
