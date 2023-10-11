@@ -160,3 +160,4 @@ for row in training_data:
     true_labels.append(row[-1])
     predicted_labels.append(predict(tree, row))
 print(calculate_error(true_labels, predicted_labels))
+
