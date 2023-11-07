@@ -1,0 +1,55 @@
+import numpy as np 
+import pandas as pd
+import csv
+
+'''
+hw3, practice 2(c)
+zhenhua shi
+'''
+
+train_file_path = 'bank-note/train.csv'
+test_file_path = 'bank-note/test.csv'
+
+dispatcher ={0:-1,1:1}
+
+# train
+df_train = pd.read_csv(train_file_path, header=None)  
+print(df_train)
+df_train.insert(loc=0, column='0', value=1)
+x_train = df_train.iloc[:, :-1].values.tolist()
+y_train_raw = df_train.iloc[:, -1].values.tolist()
+y_train = [dispatcher[lb] for lb in y_train_raw]
+
+# test
+df_test = pd.read_csv(test_file_path, header=None) 
+df_test.insert(loc=0, column='0', value=1)  
+x_test = df_test.iloc[:, :-1].values.tolist()
+y_test_raw = df_test.iloc[:, -1].values.tolist()
+y_test = [dispatcher[lb] for lb in y_test_raw] 
+
+def Averaged_PerceptronTrain(x_train,y_train,epochs,LR):
+    w = np.zeros(len(x_train[0]))
+    a = 0
+    
+    for t in range(epochs):
+        for i in range(len(x_train)):
+            if (y_train[i]*np.matmul(w,np.transpose(np.asarray(x_train[i])))) <= 0:
+                w = w + LR*y_train[i]*np.asarray(x_train[i])
+                a = a + w  
+    return a
+
+def Averaged_PerceptronTest(a, x_test, y_test):
+    err = 0
+    for i in range(len(x_test)):
+        pred = np.sign(np.matmul(a,np.transpose(np.asarray(x_test[i]))))
+        if pred != y_test[i]:
+            err = err+1
+    
+    return err/len(x_test)
+
+a = Averaged_PerceptronTrain(x_train,y_train,epochs = 10,LR = 0.1)
+test_err = Averaged_PerceptronTest(a,x_test,y_test)
+print('Weight vector:')
+print(a)
+print('Test error:')
+print(test_err)
