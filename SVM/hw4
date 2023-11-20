@@ -1,0 +1,112 @@
+import numpy
+from sys import path
+from random import shuffle
+import scipy.optimize
+
+def prediction(weights, test):
+    return 1 if weights.transpose().dot(test) >= 0 else -1
+
+def getErrorRate(weights, testData):
+    successes = 0
+    fails = 0
+    for test, y in testData:
+        if prediction(weights, test) == y:
+            successes += 1
+        else:
+            fails += 1
+    return fails/(successes+fails)
+
+trainData = []
+
+def load_data(file_path):
+    data = []
+    with open(file_path, 'r') as f:
+        for line in f:
+            terms = line.strip().split(',')
+            features = [float(term) for term in terms[:-1]] + [1]  # 加入偏置项
+            label = 1 if float(terms[-1]) != 0 else -1
+            data.append((np.array(features), label))
+    return data
+
+trainData = load_data('bank-note/train.Cv')
+testData = load_data('bank-note/test.Cv')
+
+C = [100/873, 500/873, 700/873]
+
+def PrimalSVM(y0, a, C, T = 100, trainData = trainData):
+    weights = numpy.array([0]*5)
+    w0 = weights.copy()
+    N = len(trainData)
+    for t in range(T):
+        if a == 0:
+            lr = y0/(1+t)
+        else:
+            lr = y0/(1+(y0*t/a))
+        shuffle(trainData)
+        for x, y in trainData:
+            if y * weights.transpose().dot(x) <= 1:
+                weights = weights-lr*(w0 - (C*N*y*x))
+                w0 = weights.copy()
+                w0[4] = 0
+            else:
+                w0 = (1-lr)*w0
+    return weights
+
+
+
+
+def DualSVM(C, trainData = trainData):
+    def dualObjectiveFunc(alpha, X, y):
+        X = numpy.matrix(X)
+        yMatrix = y*numpy.ones(shape=(len(y), len(y)))
+        alphaMatrix = alpha * numpy.ones(shape=(len(alpha), len(alpha)))
+        Inner = (yMatrix*yMatrix.transpose()) * (alphaMatrix*alphaMatrix.transpose()) * (X*X.transpose())
+        dualObjFunc = 0.5* Inner.sum() - sum(alpha)
+        return dualObjFunc
+    def constraint(alpha, y, C):
+        sum = 0
+        for i in range(len(alpha)):
+            
+            if 0 <= alpha[i] <= C:
+                sum += alpha[i]*y[i]
+            else:
+                return 1
+        return sum
+
+    y = []
+    X = []
+    for Xi,yi in trainData:
+        y.append(yi)
+        X.append(Xi[:4])
+    y = numpy.array(y)
+    weights = numpy.array([0]*4)
+    weights = numpy.asarray(weights, dtype = numpy.float64)
+    constraints = [{'type': 'eq', 'fun': constraint, 'args': (y, C)}]
+    Solution = scipy.optimize.minimize(dualObjectiveFunc, x0=numpy.zeros(shape=(len(X),)), args=(X,y), method="SLSQP", constraints=constraints)
+    print(Solution["success"])
+    for i in range(len(X)):
+        weights = weights + (Solution["x"][i]*y[i]*X[i])
+    bias = 0
+    weights = numpy.asarray(weights).reshape(-1)
+    for i in range(len(X)):
+        
+        bias += y[i] - weights.dot(X[i])
+    bias = bias/len(X)
+    weights = numpy.append(weights, [bias])
+    return weights
+
+
+print("Primal SVM ---- 2(a) ")
+for C in C_values:
+    w = PrimalSVM(0.01, 0.0085, C, trainData)
+    print(f"C: {C:.3f} | Weights: {w} | Train Error: {getErrorRate(w, trainData):.2%} | Test Error: {getErrorRate(w, testData):.2%}")
+
+print("\nPrimal SVM ---- 2(b) ")
+for C in C_values:
+    w = PrimalSVM(0.01, 0, C, trainData)
+    print(f"C: {C:.3f} | Weights: {w} | Train Error: {getErrorRate(w, trainData):.2%} | Test Error: {getErrorRate(w, testData):.2%}")
+
+print("\n\nDual SVM:")
+for C in C_values:
+    w = DualSVM(C, trainData)
+    print(f"C: {C:.3f} | Weights: {w} | Train Error: {getErrorRate(w, trainData):.2%} | Test Error: {getErrorRate(w, testData):.2%}")
