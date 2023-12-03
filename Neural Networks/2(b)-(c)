@@ -1,0 +1,214 @@
+import numpy as np
+from random import shuffle
+import pandas as pd
+
+
+class NeuralNetwork:
+ 
+
+    class Layer:
+        def sig(self, x):
+            x = np.clip(x, -500, 500)
+            return 1/(1+np.exp(-x))
+        def sigPrime(self, x):
+            x = np.clip(x, -500, 500)
+            return 1/(1+np.exp(-x))*(1-1/(1+np.exp(-x)))
+
+        def tanh(self, x):
+            return np.tanh(x)
+        def tanhPrime(self, x):
+            return 1-np.tanh(x)**2
+
+        def __init__(self, input_size, output_size) -> None:
+            self.weights = np.random.rand(input_size, output_size) - 0.5
+            self.bias = np.random.rand(1, output_size) - 0.5
+            self.numNodes = output_size
+            self.input = []
+            self.input2 = []
+
+        def forward_propagation(self, input_data):
+            self.input.append(input_data)
+            temp = np.dot(input_data, self.weights) + self.bias
+            self.input2.append(temp)
+            self.output = self.sig(temp)
+            return self.output
+
+        # computes dE/dW, dE/dB for a given output_error=dE/dY. Returns input_error=dE/dX.
+        def backward_propagation(self, output_error, learning_rate):
+            output_error = self.sigPrime(self.input2.pop()) * output_error
+            input_error = np.dot(output_error, self.weights.T)
+            weights_error = np.dot(self.input.pop().T, output_error)
+            # dBias = output_error
+
+            # update parameters
+            #print(weights_error)
+            self.weights -= learning_rate * weights_error
+            self.bias -= learning_rate * output_error
+            return input_error
+    
+    class FinalLayer(Layer):
+        def forward_propagation(self, input_data):
+            self.input.append(input_data)
+            self.output = np.dot(input_data, self.weights) + self.bias
+            return self.output
+
+        # computes dE/dW, dE/dB for a given output_error=dE/dY. Returns input_error=dE/dX.
+        def backward_propagation(self, output_error, learning_rate):
+            input_error = np.dot(output_error, self.weights.T)
+            weights_error = np.dot(self.input.pop().T, output_error)
+            # dBias = output_error
+
+            # update parameters
+            #print(weights_error)
+            self.weights -= learning_rate * weights_error
+            self.bias -= learning_rate * output_error
+            return input_error
+        
+        
+    
+    def __init__(self, sizeOfInput, numLayers = 0, numberOfNodes = 0) -> None:
+        if numLayers > 0 and (sizeOfInput <= 0 or numberOfNodes <= 0):
+            print("Cannot make a Neural Net with no input or a defined hidden layer size.\n \
+Please try again with non negative integers for the second and third parameters.")
+            return
+        if sizeOfInput == 0:
+            print("Cannot build Neural Net with no input size.")
+            return
+        self.weights = None
+        self.inputSize = sizeOfInput
+        self.layers = []
+        if numLayers > 0:
+            self.layers.append(NeuralNetwork.Layer(sizeOfInput, numberOfNodes))
+        for i in range(numLayers-2):
+            self.layers.append(NeuralNetwork.Layer(numberOfNodes, numberOfNodes))
+        if numLayers > 0:
+            self.layers.append(NeuralNetwork.FinalLayer(numberOfNodes, 1))
+
+    def addLayer(self, outputSize):
+        if self.inputSize == -1:
+            print("Final layer has been added to this net work, cannot add more layers.")
+            return
+        layer = NeuralNetwork.Layer(self.inputSize, outputSize)
+        self.layers.append(layer)
+        self.inputSize = outputSize
+
+    def addFinalLayer(self):
+        layer = NeuralNetwork.FinalLayer(self.inputSize, 1)
+        self.layers.append(layer)
+        self.inputSize = -1
+
+    def predict(self, input):
+        for layer in self.layers:
+            input = layer.forward_propagation(input)
+        return 1 if input >= 0.5 else 0
+
+    def predictNonBinary(self, input):
+        for layer in self.layers:
+            input = layer.forward_propagation(input)
+        return input[0][0]
+    
+    def lossFunction(self, y, yprime):
+        return (1/2)*(y-yprime)**2
+
+    def lossPrime(self, y, yprime):
+        return y-yprime
+
+    def backProp(self, example, learning_rate):
+        output = example[0]
+        for layer in self.layers:
+            output = layer.forward_propagation(output)
+        # backward propagation
+        # print(self.lossFunction(output, example[1]))
+
+        error = self.lossPrime(output, example[1])
+        for layer in reversed(self.layers):
+            error = layer.backward_propagation(error, learning_rate)
+
+    def batchBackProp(self, examples, learning_rate):
+        outputList = []
+        for i in range(len(examples)):
+            output = examples[i][0]
+            for layer in self.layers:
+                output = layer.forward_propagation(output)
+            outputList.append(output)
+
+        # backward propagation
+        # print(self.lossFunction(output, examples[1]))
+
+        for i in range(len(examples)):
+            error = self.lossPrime(outputList[i], examples[i][1])
+            for layer in reversed(self.layers):
+                error = layer.backward_propagation(error, learning_rate)
+    
+    def getErrorRate(self, testData):
+        successes = 0
+        fails = 0
+        for test, y in testData:
+            if self.predict(test) == y:
+                successes += 1
+            else:
+                fails += 1
+        return fails/(successes+fails)
+
+    def SGD(self, S, epochs, gamma = 0.1, d = 0.085):
+        for t in range(epochs):
+            gammat = gamma/(1+(gamma/d)*t)
+            shuffle(S)
+            for input in S:
+                #found example that did weight updates during back propagation, decided that made more sense.
+                self.backProp(input, gammat)
+    
+    def batchSGD(self, S, epochs, batchSize, gamma = 0.1, d = 2):
+        for t in range(epochs):
+            gammat = gamma/(1+(gamma/d)*t)
+            shuffle(S)
+            self.batchBackProp(S[:batchSize], gammat)
+
+
+#--------------------------------------------------------------------------------------------------------
+
+import numpy as np
+from sys import argv
+
+
+trainData = []
+
+with open('bank-note/train.csv', 'r') as f:
+    for line in f:
+        listToAdd = []
+        terms = line.strip().split(',')
+        for i in range(4):
+            listToAdd.append(float(terms[i]))
+        trainData.append((np.array([listToAdd]), (1 if float(terms[4]) != 0 else 0)))
+
+testData = []
+
+with open('bank-note/test.csv', 'r') as f:
+    for line in f:
+        listToAdd = []
+        terms = line.strip().split(',')
+        for i in range(4):
+            listToAdd.append(float(terms[i]))
+        testData.append((np.array([listToAdd]), (1 if float(terms[4]) != 0 else 0)))
+
+if len(argv) > 1:
+    numberOfNodes = int(argv[1])
+    print(f"User input received, using {numberOfNodes} Neurons per layer.")
+else:
+    print("No user input, default is 5 Neurons per layer.")
+    numberOfNodes = 5
+
+if len(argv) > 2:
+    T = int(argv[2])
+    print(f"Using {T} epochs.")
+else:
+    T = 100
+    print("Using 100 epochs.")
+
+NN = NeuralNetwork(4, 2,100)
+NN.backProp(trainData[0], 0.01)
+#NN = NeuralNetwork(len(trainData[0][0][0]), 2, numberOfNodes)
+NN.SGD(trainData, T)
+
+print(f"Train Error {NN.getErrorRate(trainData):.6f}")
+print(f"Test Error {NN.getErrorRate(testData):.6f}")
