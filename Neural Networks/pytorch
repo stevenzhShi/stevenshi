@@ -1,0 +1,12 @@
+import torch
+import torch.nn as nn
+
+numberOfNodes = 5
+torch.empty()
+nn.init.kaiming_uniform_
+model = nn.Sequential(nn.Linear(4, numberOfNodes),
+                      nn.ReLU(),
+                      nn.Linear(numberOfNodes, numberOfNodes),
+                      nn.ReLU(),
+                      nn.Linear(numberOfNodes, 1))
+print(model)
